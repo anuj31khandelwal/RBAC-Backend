@@ -3,37 +3,53 @@ package com.example.rbac.Utils;
 import com.example.rbac.Models.User;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
-import org.springframework.security.core.Authentication;  // Corrected import
+import io.jsonwebtoken.security.Keys; // For secret key
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 
+import javax.crypto.SecretKey;
 import java.util.Date;
 
 @Component
 public class JwtUtils {
-    private final String jwtSecret = "yourSecretKey";
+
+    // Generate a secret key for HS512
+    private final SecretKey jwtSecretKey = Keys.hmacShaKeyFor("yourSecretKeyHere1234567890123456".getBytes());
+
     private final int jwtExpirationMs = 86400000;
 
-    // This method now uses the correct Authentication type from Spring Security
+    // Generate JWT Token
     public String generateJwtToken(Authentication authentication) {
         User user = (User) authentication.getPrincipal();
         return Jwts.builder()
-                .setSubject(user.getUsername())  // Correct usage of user.getUsername()
-                .setIssuedAt(new Date())
-                .setExpiration(new Date((new Date()).getTime() + jwtExpirationMs))
-                .signWith(SignatureAlgorithm.HS512, jwtSecret)
+                .subject(user.getUsername())
+                .issuedAt(new Date())
+                .expiration(new Date((new Date()).getTime() + jwtExpirationMs))
+                .signWith(jwtSecretKey,  Jwts.SIG.HS512) // Use SecretKey with SignatureAlgorithm
                 .compact();
     }
 
+    // Extract username from the JWT token
     public String getUserNameFromJwtToken(String token) {
-        return Jwts.parser().setSigningKey(jwtSecret).parseClaimsJws(token).getBody().getSubject();
+        return Jwts.parser() // Updated method
+                .verifyWith(jwtSecretKey)
+                .build() // Build the parser
+                .parseSignedClaims(token)
+                .getPayload()
+                .getSubject();
     }
 
+    // Validate the JWT token
     public boolean validateJwtToken(String authToken) {
         try {
-            Jwts.parser().setSigningKey(jwtSecret).parseClaimsJws(authToken);
+            Jwts.parser()
+                    .verifyWith(jwtSecretKey)
+                    .build()
+                    .parseSignedClaims(authToken);
             return true;
         } catch (Exception e) {
             // Handle exceptions like ExpiredJwtException, UnsupportedJwtException, etc.
+            e.printStackTrace(); // Log the exception for debugging
         }
         return false;
     }
